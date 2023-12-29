@@ -6,7 +6,7 @@ Traffic Detector is a feature of the original software SmartFlow Traffic Manager
 
 1. Object Detection of vehicles and pedestrians on the road present in the image in the road junction.
 
-2. Monitoring the objects in the video feed.
+2. Tracking the objects in the video feed.
 
 3. Mapping the objects to the map and showing the movements of the respective objects in the map.
 
