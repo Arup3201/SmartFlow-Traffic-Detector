@@ -12,7 +12,7 @@ Traffic Detector is a feature of the original software SmartFlow Traffic Manager
 
 4. Finding traffic flow data like traffic volume, count of each vehicles and pedestrians along with their respective direction.
 
-**Model Development Process:**
+**Object Detection Model Development Process:**
 
 1. **Feature Extraction:**
    
