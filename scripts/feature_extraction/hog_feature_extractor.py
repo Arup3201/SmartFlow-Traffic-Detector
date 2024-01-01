@@ -1,7 +1,3 @@
-import math
-import numpy as np
-from PIL import Image
-
 class HistogramOrientedGradients:
     '''
     HOG class implements the histogram oriented gradient algorithm to extract features from an image.
