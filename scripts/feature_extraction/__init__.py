@@ -1,0 +1,1 @@
+from .hog_feature_extractor import HistogramOrientedGradients

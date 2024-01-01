@@ -25,12 +25,13 @@ class HistogramOrientedGradients:
         self.buckets = buckets
         self.cells_per_block = cells_per_block
 
+
     def open_image(self, img_path):
         '''
         opens the image, converts it into gray scale and then resizes it according to the image dimension mentioned and finally converts it into numpy array of float32 data type.
         
         args:
-        `img_path`: str, path to the image
+        `img_path`: str, path to the image with respect to root directory
 
         returns:
         image after all tranformations
@@ -152,28 +153,44 @@ class HistogramOrientedGradients:
         returns:
         numpy.ndarray, array of histograms from each cell in the image
         '''
-        h_limit = magnitudes.shape[1] // self.pixels_per_cell - 1
-        v_limit = magnitudes.shape[0] // self.pixels_per_cell - 1
+        v_limit = magnitudes.shape[0] // self.pixels_per_cell - 1 # 64//8-1 = 7
+        h_limit = magnitudes.shape[1] // self.pixels_per_cell - 1 # 128//8-1 = 15
 
         hist_matrices = []
 
-        for i in range(h_limit+1):
-            hists = []
-            for j in range(v_limit+1):
-                magnitude_cell = magnitudes[i*self.pixels_per_cell:(i+1)*self.pixels_per_cell-1,
-                                            j*self.pixels_per_cell:(j+1)*self.pixels_per_cell-1]
-                orientation_cell = orientations[i*self.pixels_per_cell:(i+1)*self.pixels_per_cell-1,
-                                                j*self.pixels_per_cell:(j+1)*self.pixels_per_cell-1]
+        # First move horizontally then move vertically so that hist_matrices has same dimension of (height, width)
+        # Move vertically
+        for j in range(v_limit+1):
 
+            # Keep track of each histogram that we get vertically
+            hists = []
+
+            # Move horizontally
+            for i in range(h_limit+1):
+
+                # pick 8X8 cells horizontally and vertically for magnitudes and orientations
+                # 8X8 cell positions (y1, x1, y2, x2)
+                # (0, 0, 7, 7), (8, 0, 15, 7), ..., (j*ppc, i*ppc, (j+1)*ppc-1, (i+1)*ppc-1)
+                magnitude_cell = magnitudes[j*self.pixels_per_cell:(j+1)*self.pixels_per_cell,
+                                            i*self.pixels_per_cell:(i+1)*self.pixels_per_cell]
+                orientation_cell = orientations[j*self.pixels_per_cell:(j+1)*self.pixels_per_cell,
+                                                i*self.pixels_per_cell:(i+1)*self.pixels_per_cell]
+
+                # Generate 9X1 histogram for each 8X8 cell
                 histogram = self.generate_histogram(orientation_cell, magnitude_cell)
 
+                # Append it to the existing list of horizontal historgrams
                 hists.append(histogram)
 
+            # Append list of horizontal histograms to existing list
             hist_matrices.append(hists)
 
         return np.array(hist_matrices)
     
     def normalize_histograms(self, histograms):
+        '''
+        Normalize the hostograms of each cell using a block and normalizing that block by calculating norm and dividing all values in that block by that norm.
+        '''
         v_limit = histograms.shape[0] - self.cells_per_block # 8-2 = 6
         h_limit = histograms.shape[1] - self.cells_per_block # 16-2 = 14
 
@@ -204,7 +221,7 @@ class HistogramOrientedGradients:
         performs the histogram oriented gradient on the image located at `img_path`.
 
         args:
-        `img_path`: str, location of the image
+        `img_path`: Pathlib.Path data, location of the image
 
         returns:
         numpy.ndarray, features of the image after performing histogram oriented gradients
