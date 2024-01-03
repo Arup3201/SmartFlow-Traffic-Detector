@@ -27,7 +27,7 @@ class HistogramOrientedGradients:
         self.channel_axis = channel_axis
         self.multichannel = True if self.channel_axis is not None else False
 
-    def __open_image(self, img_path):
+    def _open_image(self, img_path):
         '''
         opens the image, converts it into gray scale and then resizes it according to the image dimension mentioned and finally converts it into numpy array of float32 data type.
         
@@ -133,28 +133,31 @@ class HistogramOrientedGradients:
         returns:
         numpy.ndarray, array of histograms from each cell in the image
         '''
-        v_limit = magnitudes.shape[0] // self.pixels_per_cell - 1 # 64//8-1 = 7
-        h_limit = magnitudes.shape[1] // self.pixels_per_cell - 1 # 128//8-1 = 15
+        cell_nr = magnitudes.shape[0] // self.pixels_per_cell[0] # 64//8 = 8
+        cell_nc = magnitudes.shape[1] // self.pixels_per_cell[1] # 128//8 = 16
+
+        p_r = self.pixels_per_cell[0]
+        p_c = self.pixels_per_cell[1]
 
         hist_matrices = []
 
         # First move horizontally then move vertically so that hist_matrices has same dimension of (height, width)
         # Move vertically
-        for j in range(v_limit+1):
+        for r in range(cell_nr):
 
             # Keep track of each histogram that we get vertically
             hists = []
 
             # Move horizontally
-            for i in range(h_limit+1):
+            for c in range(cell_nc):
 
                 # pick 8X8 cells horizontally and vertically for magnitudes and orientations
                 # 8X8 cell positions (y1, x1, y2, x2)
                 # (0, 0, 7, 7), (8, 0, 15, 7), ..., (j*ppc, i*ppc, (j+1)*ppc-1, (i+1)*ppc-1)
-                magnitude_cell = magnitudes[j*self.pixels_per_cell:(j+1)*self.pixels_per_cell,
-                                            i*self.pixels_per_cell:(i+1)*self.pixels_per_cell]
-                orientation_cell = orientations[j*self.pixels_per_cell:(j+1)*self.pixels_per_cell,
-                                                i*self.pixels_per_cell:(i+1)*self.pixels_per_cell]
+                magnitude_cell = magnitudes[r*p_r:(r+1)*p_r,
+                                            c*p_c:(c+1)*p_c]
+                orientation_cell = orientations[r*p_r:(r+1)*p_r,
+                                                c*p_c:(c+1)*p_c]
 
                 # Generate 9X1 histogram for each 8X8 cell
                 histogram = self.generate_histogram(orientation_cell, magnitude_cell)
@@ -171,21 +174,24 @@ class HistogramOrientedGradients:
         '''
         Normalize the hostograms of each cell using a block and normalizing that block by calculating norm and dividing all values in that block by that norm.
         '''
-        v_limit = histograms.shape[0] - self.cells_per_block # 8-2 = 6
-        h_limit = histograms.shape[1] - self.cells_per_block # 16-2 = 14
+        block_nr = histograms.shape[0] - self.cells_per_block[0] + 1 # 8-2+1=7
+        block_nc = histograms.shape[1] - self.cells_per_block[1] + 1 # 16-2+1=15
+
+        c_r = self.cells_per_block[0]
+        c_c = self.cells_per_block[1]
 
         normalized_blocks = []
 
         # First horizontal and then vertical because dimension should be (height, width) convention
-        for j in range(v_limit+1):
+        for r in range(block_nr):
 
             norm_blocks = []
 
-            for i in range(h_limit+1):
+            for c in range(block_nc):
 
                 # Block positions (y1, x1, y2, x2)
                 # (0, 0, 1, 1), (0, 1, 1, 2), ..., (j, i, j+cpb-1, j+cpb-1)
-                block = histograms[j:j+self.cells_per_block, i:i+self.cells_per_block, ...]
+                block = histograms[r:r+c_r, c:c+c_c, ...]
                 block = block.reshape((-1, 1)) # (36, 1)
                 norm = np.sqrt(np.sum(block**2)) # k = sqrt(a1**2+a2**2+...)
                 block = block / norm
