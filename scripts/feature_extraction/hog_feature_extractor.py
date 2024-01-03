@@ -6,12 +6,12 @@ class HistogramOrientedGradients:
     '''
     HOG class implements the histogram oriented gradient algorithm to extract features from an image.
     '''
-    def __init__(self, img_dimension=(128, 64), pixels_per_cell=8, buckets=9, cells_per_block=2):
+    def __init__(self, img_dimension=(128, 64), pixels_per_cell=(8, 8), buckets=9, cells_per_block=(2, 2), channel_axis=None):
         '''
         Initialize the class with parameter values.
 
         args:
-        `img_dimension`: tuple of 2 values, shape to which image should be resized before performing hog
+        `img_dimension`: tuple of 2 values, shape to which image should be resized before performing hog `(width, height)`
         `pixels_per_cell`: int, number of pixels taken in each cell horizontally and vertically
         `buckets`: int, number of groups or bins of orientations to generate the histogram
         `cells_per_block`: int, number of cells for which gradient normalization will be performed
@@ -24,9 +24,10 @@ class HistogramOrientedGradients:
         self.pixels_per_cell = pixels_per_cell
         self.buckets = buckets
         self.cells_per_block = cells_per_block
+        self.channel_axis = channel_axis
+        self.multichannel = True if self.channel_axis is not None else False
 
-
-    def open_image(self, img_path):
+    def __open_image(self, img_path):
         '''
         opens the image, converts it into gray scale and then resizes it according to the image dimension mentioned and finally converts it into numpy array of float32 data type.
         
@@ -39,12 +40,24 @@ class HistogramOrientedGradients:
         img = Image.open(img_path)
         img = img.convert('L')
         img = img.resize(self.img_dimension)
-        img = np.array(img)
+        img = np.atleast_2d(img)
         img = img.astype(np.float32)
 
         return img
     
-    def calculate_magnitude_angels(self, img):
+    def _get_gradient_channel(self, g_row, g_col, channel):
+        g_row[0, :] = 0
+        g_col[:, 0] = 0
+        g_row[-1, :] = 0
+        g_col[:, -1] = 0
+
+        g_row[1:-1, :] = channel[2:, :] - channel[:-2, :]
+        g_col[:, 1:-1] = channel[:, 2:] - channel[:, :-2]
+
+        return g_row, g_col
+    
+
+    def calculate_magnitude_angels(self, img, ep=1e-6):
         '''
         calculates magnitude and orientations of the image `img`.
         
@@ -55,54 +68,23 @@ class HistogramOrientedGradients:
         magnitudes and orientations of the image
         '''
 
-        mag = []
-        ang = []
+        g_row = np.empty_like(img, dtype=np.float32)
+        g_col = np.empty_like(img, dtype=np.float32)
 
-        height = img.shape[0]
-        width = img.shape[1]
+        g_mag = np.empty_like(img, dtype=np.float32)
+        g_ang = np.empty_like(img, dtype=np.float32)
 
-        for r in range(height):
-            magnitude_array = []
-            angel_array = []
+        if self.multichannel:
+            for ch_id in range(img.shape[self.channel_axis]):
+                g_row, g_col = self._get_gradient_channel(g_row, g_col, img[:, :, ch_id])
+        else:
+            g_row, g_col = self._get_gradient_channel(g_row, g_col, img[:, :])
 
-            for c in range(width):
-                # Calculate gradient on x
-                # When column is 0 or last column
-                if c == 0:
-                    Gx = img[r, c+1] - 0
-                elif c == width-1:
-                    Gx = 0 - img[r, c-1]
-                else:
-                    Gx = img[r, c+1] - img[r, c-1]
+        
+        g_mag = np.hypot(g_row, g_col)
+        g_ang = np.rad2deg(np.arctan(g_row, g_col+ep)) % 180
 
-                # Calculate gradient on y
-                # When row is 0 or last row
-                if r == 0:
-                    Gy = img[r+1, c] - 0
-                elif r == height-1:
-                    Gy = 0 - img[r-1, c]
-                else:
-                    Gy = img[r+1, c] - img[r-1, c]
-
-                # Calculate magnitude
-                magnitude = math.sqrt(Gx**2 + Gy**2)
-                magnitude_array.append(round(magnitude, 9))
-
-                # Calculate orienta
-                if Gx == 0:
-                    angel = math.degrees(0.0)
-                else:
-                    angel = math.degrees(abs(math.atan2(Gy, Gx)))
-
-                angel_array.append(round(angel, 9))
-
-            mag.append(magnitude_array)
-            ang.append(angel_array)
-
-        mag = np.array(mag)
-        ang = np.array(ang)
-
-        return mag, ang
+        return g_mag, g_ang
     
     def generate_histogram(self, cell_orientations, cell_magnitudes):
         '''
@@ -118,19 +100,17 @@ class HistogramOrientedGradients:
         matrix = np.zeros(shape=(self.buckets, 1))
         step_size = 180//self.buckets
 
+        nr = self.pixels_per_cell[0]
+        nc = self.pixels_per_cell[1]
 
-        for r in range(self.pixels_per_cell):
-            for c in range(self.pixels_per_cell):
+        for r in range(nr):
+            for c in range(nc):
                 # Take the magnitude and angel
                 theta = cell_orientations[r, c]
                 magnitude = cell_magnitudes[r, c]
 
                 # Find the jth and j+1th bin in which the orientation falls
-                if theta == 180:
-                    j_bin = self.buckets - 1
-                else:
-                    j_bin = int(theta / step_size)
-
+                j_bin = int(theta / step_size)
                 j_1_bin = int(theta / step_size) % self.buckets # When j = 8 next is j+1 = 0
 
                 # Calculate the jth and j+1th bins contribution to the orientation
@@ -228,7 +208,7 @@ class HistogramOrientedGradients:
         '''
         
         # Open the image
-        img = self.open_image(img_path)
+        img = self._open_image(img_path)
 
         # Calculate magnitudes and orientations
         magnitudes, orientations = self.calculate_magnitude_angels(img)
